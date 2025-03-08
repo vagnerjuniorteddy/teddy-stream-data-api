@@ -55,7 +55,7 @@ export const createWritableStream = ({
       const writeStreamHeader = createWriteStream(path, {
         flags: 'w',
       });
-      writeStreamHeader.write(`${formatHeader(headers)}\n`);
+      writeStreamHeader.write(`${formatHeader(headers)}`);
     }
   };
 
