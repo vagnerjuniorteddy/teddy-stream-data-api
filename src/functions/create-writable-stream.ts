@@ -5,35 +5,69 @@ export type WriteStream = {
   stream: ReadStream;
   path: string;
   pipes: Array<Duplex>;
-  onError?: (error: Error) => void;
+  headersConfig?: {
+    headers: string[];
+    formatHeader: (headers: string[]) => string;
+  };
 };
 
 export const createWritableStream = ({
   stream,
   path,
   pipes = [],
-  onError,
+  headersConfig,
 }: WriteStream) => {
-  let pipeIndex = 0;
-  const recursive = (stream: ReadStream | Duplex, pipe: Duplex) => {
-    pipeIndex++;
+  const addPipes = ({
+    stream,
+    pipes,
+  }: {
+    stream: ReadStream;
+    pipes: Duplex[];
+  }) => {
+    let pipeIndex = 0;
+    const recursive = (stream: ReadStream | Duplex, pipe: Duplex) => {
+      pipeIndex++;
 
-    const streamPiped = stream.pipe(pipe);
+      const streamPiped = stream.pipe(pipe);
 
-    if (pipes[pipeIndex]) {
-      return recursive(streamPiped, pipes[pipeIndex]);
-    }
+      if (pipes[pipeIndex]) {
+        return recursive(streamPiped, pipes[pipeIndex]);
+      }
 
-    return streamPiped;
+      return streamPiped;
+    };
+
+    return recursive(stream, pipes[pipeIndex]);
   };
 
-  const streamPiped = recursive(stream, pipes[pipeIndex]);
+  const createHeaders = ({
+    path,
+    headersConfig,
+  }: {
+    path: string;
+    headersConfig?: {
+      headers: string[];
+      formatHeader: (headers: string[]) => string;
+    };
+  }) => {
+    if (headersConfig) {
+      const { headers, formatHeader } = headersConfig;
+      const writeStreamHeader = createWriteStream(path, {
+        flags: 'w',
+      });
+      writeStreamHeader.write(`${formatHeader(headers)}\n`);
+    }
+  };
 
-  streamPiped.pipe(createWriteStream(path, { flags: 'w' }));
+  createHeaders({ path, headersConfig });
 
-  if (onError) {
-    stream.on('error', onError);
-  }
+  const streamPiped = addPipes({ stream, pipes });
+
+  const writeStream = createWriteStream(path, {
+    flags: !!headersConfig ? 'a' : 'w',
+  });
+
+  streamPiped.pipe(writeStream);
 
   return streamPiped;
 };
