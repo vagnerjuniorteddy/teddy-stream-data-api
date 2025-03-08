@@ -34,4 +34,6 @@ export const createWritableStream = ({
   if (onError) {
     stream.on('error', onError);
   }
+
+  return streamPiped;
 };
