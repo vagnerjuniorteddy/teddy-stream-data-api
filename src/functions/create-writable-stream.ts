@@ -14,15 +14,24 @@ export const createWritableStream = ({
   pipes = [],
   onError,
 }: WriteStream) => {
-  const writableStream = createWriteStream(path, { flags: 'w' });
+  let pipeIndex = 0;
+  const recursive = (stream: ReadStream | Duplex, pipe: Duplex) => {
+    pipeIndex++;
 
-  pipes.forEach((pipe) => stream.pipe(pipe));
+    const streamPiped = stream.pipe(pipe);
 
-  stream.pipe(writableStream);
+    if (pipes[pipeIndex]) {
+      return recursive(streamPiped, pipes[pipeIndex]);
+    }
+
+    return streamPiped;
+  };
+
+  const streamPiped = recursive(stream, pipes[pipeIndex]);
+
+  streamPiped.pipe(createWriteStream(path, { flags: 'w' }));
 
   if (onError) {
     stream.on('error', onError);
   }
-
-  return writableStream;
 };

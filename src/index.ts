@@ -1,5 +1,8 @@
+import { createWriteStream, WriteStream } from 'fs';
+import { writeFile } from 'fs/promises';
 import { resolve } from 'path';
-import { Transform } from 'stream';
+import { Transform, Writable } from 'stream';
+import { pipeline } from 'stream/promises';
 
 import {
   Column,
@@ -8,8 +11,7 @@ import {
   Entity,
   PrimaryGeneratedColumn,
 } from 'typeorm';
-import { createWritableStream } from './functions/create-writable-stream';
-import { createReadableStream } from './functions/create-readable-stream';
+import { createReadableStream, createWritableStream } from './functions';
 
 @Entity({ name: 'users' })
 export class User {
@@ -46,28 +48,40 @@ export async function main() {
 
   await dataSource.initialize();
 
-  const streams = await createReadableStream({
+  const userStreams = await createReadableStream({
     entity: dataSource.getRepository(User),
     select: ['id', 'name'],
-    where: { sql: '', params: {} },
+    where: {
+      sql: '',
+      params: {},
+    },
+    limit: 1000,
+    offset: 0,
   });
 
-  const writeStream = createWritableStream({
-    stream: streams,
-    path: resolve(__dirname, 'users.txt'),
-    pipes: [
-      new Transform({
-        objectMode: true,
-        transform(chunk, _encoding, callback) {
-          const { id, name } = chunk;
-          callback(null, `${id},${name}\n`);
-        },
-      }),
-    ],
-    onError: (error) => console.error('Error:', error),
+  const transform1 = new Transform({
+    objectMode: true,
+    transform(chunk: User, _encoding, callback) {
+      const { id, name } = chunk;
+      callback(null, { id, name });
+    },
   });
 
-  writeStream.on('error', (error) => console.error('Error:', error));
+  const transform2 = new Transform({
+    objectMode: true,
+    transform(chunk: { id: string; name: string }, _encoding, callback) {
+      callback(null, `${chunk.id}, ${chunk.name}\n`);
+    },
+  });
+
+  createWritableStream({
+    stream: userStreams,
+    path: resolve('users.csv'),
+    pipes: [transform1, transform2],
+    onError: (error) => {
+      console.error(`Error writing to file: ${error.message}`);
+    },
+  });
 }
 
 main();
