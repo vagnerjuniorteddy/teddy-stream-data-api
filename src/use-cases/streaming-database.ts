@@ -77,6 +77,7 @@ export class StreamingDatabase {
 
       streamPiped.on('error', async (error) => {
         await onError(error);
+        await unlink(file.path);
       });
 
       streamPiped;
